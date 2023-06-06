@@ -84,6 +84,11 @@ func NewServer() iface.IServer {
 	return newServerWithConfig(conf.GlobalConfig, conf.ServerModeTcp)
 }
 
+func NewWsServer() iface.IServer {
+	conf.GlobalConfig.Show()
+	return newServerWithConfig(conf.GlobalConfig, conf.ServerModeWebsocket)
+}
+
 func (s *Server) Start() {
 	log.Infof("【BaiX】[START] Server name: %s,listener at IP: %s, Port %d is starting", s.Name, s.IP, s.Port)
 	s.exitChan = make(chan struct{})
