@@ -1,9 +1,11 @@
 package net
 
 import (
+	"context"
 	"fmt"
 	"github.com/oldbai555/baix/iface"
 	"github.com/oldbai555/lbtool/log"
+	"github.com/oldbai555/lbtool/pkg/routine"
 	"time"
 )
 
@@ -41,12 +43,12 @@ func NewHeartbeatChecker(interval time.Duration) iface.IHeartbeatChecker {
 }
 
 func makeDefaultMsg(conn iface.IConnection) []byte {
-	msg := fmt.Sprintf("heartbeat [%s->%s]", conn.LocalAddr(), conn.RemoteAddr())
+	msg := fmt.Sprintf("【BaiX】heartbeat [%s->%s]", conn.LocalAddr(), conn.RemoteAddr())
 	return []byte(msg)
 }
 
 func notAliveDefaultFunc(conn iface.IConnection) {
-	log.Infof("Remote connection %s is not alive, stop it", conn.RemoteAddr())
+	log.Infof("【BaiX】Remote connection %s is not alive, stop it", conn.RemoteAddr())
 	conn.Stop()
 }
 
@@ -64,7 +66,7 @@ func (h *HeartbeatChecker) check() (err error) {
 	if h.beatFunc != nil {
 		err = h.beatFunc(h.conn)
 		if err != nil {
-			log.Errorf("err is %v", err)
+			log.Errorf("【BaiX】err is %v", err)
 			return err
 		}
 		return nil
@@ -72,7 +74,7 @@ func (h *HeartbeatChecker) check() (err error) {
 
 	err = h.SendHeartBeatMsg()
 	if err != nil {
-		log.Errorf("err is %v", err)
+		log.Errorf("【BaiX】err is %v", err)
 		return err
 	}
 
@@ -100,22 +102,24 @@ func (h *HeartbeatChecker) BindRouter(msgID uint32, router iface.IRouter) {
 
 func (h *HeartbeatChecker) Start() {
 	ticker := time.NewTicker(h.interval)
-	for {
-		select {
-		case <-ticker.C:
-			err := h.check()
-			if err != nil {
-				log.Errorf("err is %v", err)
+	routine.Go(context.TODO(), func(ctx context.Context) error {
+		for {
+			select {
+			case <-ticker.C:
+				err := h.check()
+				if err != nil {
+					log.Errorf("【BaiX】err is %v", err)
+					return err
+				}
+			case <-h.quitChan:
+				ticker.Stop()
 			}
-		case <-h.quitChan:
-			ticker.Stop()
-			return
 		}
-	}
+	})
 }
 
 func (h *HeartbeatChecker) Stop() {
-	log.Infof("heartbeat checker stop, connID=%+v", h.conn.GetConnID())
+	log.Infof("【BaiX】heartbeat checker stop, connID=%+v", h.conn.GetConnID())
 	h.quitChan <- true
 }
 
@@ -124,7 +128,7 @@ func (h *HeartbeatChecker) SendHeartBeatMsg() error {
 
 	err := h.conn.SendMsg(h.msgID, msg)
 	if err != nil {
-		log.Errorf("send heartbeat msg error: %v, msgId=%+v msg=%+v", err, h.msgID, msg)
+		log.Errorf("【BaiX】send heartbeat msg error: %v, msgId=%+v msg=%+v", err, h.msgID, msg)
 		return err
 	}
 	return nil
@@ -163,5 +167,5 @@ type HeatBeatDefaultRouter struct {
 }
 
 func (r *HeatBeatDefaultRouter) Handle(req iface.IRequest) {
-	log.Infof("Recv Heartbeat from %s, MsgID = %+v, Data = %s", req.GetConnection().RemoteAddr(), req.GetMsgID(), string(req.GetData()))
+	log.Infof("【BaiX】Recv Heartbeat from %s, MsgID = %+v, Data = %s", req.GetConnection().RemoteAddr(), req.GetMsgID(), string(req.GetData()))
 }

@@ -19,84 +19,64 @@ import (
 var _ iface.IConnection = (*Connection)(nil)
 
 type Connection struct {
-	// // The socket TCP socket of the current connection(当前连接的socket TCP套接字)
+	// 当前连接的socket TCP套接字
 	conn net.Conn
 
-	// The ID of the current connection, also known as SessionID, globally unique, used by server Connection
-	// uint64 range: 0~18,446,744,073,709,551,615
-	// This is the maximum number of connID theoretically supported by the process
-	// (当前连接的ID 也可以称作为SessionID，ID全局唯一 ，服务端Connection使用
+	// 当前连接的ID 也可以称作为SessionID，ID全局唯一 ，服务端Connection使用
 	// uint64 取值范围：0 ~ 18,446,744,073,709,551,615
-	// 这个是理论支持的进程connID的最大数量)
+	// 这个是理论支持的进程connID的最大数量
 	connID uint64
 
-	// The message management module that manages MsgID and the corresponding processing method
-	// (消息管理MsgID和对应处理方法的消息管理模块)
+	// 消息管理MsgID和对应处理方法的消息管理模块
 	msgHandler iface.IMsgHandle
 
-	// Channel to notify that the connection has exited/stopped
-	// (告知该链接已经退出/停止的channel)
+	// 告知该链接已经退出/停止的channel
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	// Buffered channel used for message communication between the read and write goroutines
-	// (有缓冲管道，用于读、写两个goroutine之间的消息通信)
+	// 有缓冲管道，用于读、写两个goroutine之间的消息通信
 	msgBuffChan chan []byte
 
-	// Lock for user message reception and transmission
-	// (用户收发消息的Lock)
+	// 用户收发消息的Lock
 	msgLock sync.RWMutex
 
-	// Connection properties
-	// (链接属性)
+	// 链接属性
 	property map[string]interface{}
 
-	// Lock to protect the current property
-	// (保护当前property的锁)
+	// 保护当前property的锁
 	propertyLock sync.Mutex
 
-	// The current connection's close state
-	// (当前连接的关闭状态)
+	// 当前连接的关闭状态
 	isClosed bool
 
-	// Which Connection Manager the current connection belongs to
-	// (当前链接是属于哪个Connection Manager的)
+	// 当前链接是属于哪个Connection Manager的
 	connManager iface.IConnManager
 
-	// Hook function when the current connection is created
-	// (当前连接创建时Hook函数)
+	// 当前连接创建时Hook函数
 	onConnStart func(conn iface.IConnection)
 
-	// Hook function when the current connection is disconnected
-	// (当前连接断开时的Hook函数)
+	// 当前连接断开时的Hook函数
 	onConnStop func(conn iface.IConnection)
 
-	// Data packet packaging method
-	// (数据报文封包方式)
+	// 数据报文封包方式
 	packet iface.IDataPack
 
-	// Last activity time
-	// (最后一次活动时间)
+	// 最后一次活动时间
 	lastActivityTime time.Time
 
-	// Framedecoder for solving fragmentation and packet sticking problems
-	// (断粘包解码器)
+	// 断粘包解码器
 	frameDecoder iface.IFrameDecoder
 
-	// Heartbeat checker
-	// (心跳检测器)
+	// 心跳检测器
 	hc iface.IHeartbeatChecker
 
-	// Connection name, default to be the same as the name of the Server/Client that created the connection
-	// (链接名称，默认与创建链接的Server/Client的Name一致)
+	// 链接名称，默认与创建链接的Server/Client的Name一致
 	name string
 
-	// Local address of the current connection
-	// (当前链接的本地地址)
+	// 当前链接的本地地址
 	localAddr string
 
-	// Remote address of the current connection
-	// (当前链接的远程地址)
+	// 当前链接的远程地址
 	remoteAddr string
 }
 
@@ -137,34 +117,64 @@ func newServerConn(server iface.IServer, conn net.Conn, connID uint64) iface.ICo
 	return c
 }
 
+// newServerConn :for Server, method to create a Client-side connection with Client-specific properties
+// (创建一个Client服务端特性的连接的方法)
+func newClientConn(client iface.IClient, conn net.Conn) iface.IConnection {
+	c := &Connection{
+		conn:        conn,
+		connID:      0, // client ignore
+		isClosed:    false,
+		msgBuffChan: nil,
+		property:    nil,
+		name:        client.GetName(),
+		localAddr:   conn.LocalAddr().String(),
+		remoteAddr:  conn.RemoteAddr().String(),
+	}
+
+	lengthField := client.GetLengthField()
+	if lengthField != nil {
+		c.frameDecoder = interceptor.NewFrameDecoder(*lengthField)
+	}
+
+	// Inherited properties from server (从client继承过来的属性)
+	c.packet = client.GetPacket()
+	c.onConnStart = client.GetOnConnStart()
+	c.onConnStop = client.GetOnConnStop()
+	c.msgHandler = client.GetMsgHandler()
+
+	return c
+}
+
 func (c *Connection) callOnConnStart() {
 	if c.onConnStart != nil {
-		log.Infof("BaiX CallOnConnStart....")
+		log.Infof("【BaiX】 CallOnConnStart....")
 		c.onConnStart(c)
 	}
 }
 
 func (c *Connection) callOnConnStop() {
 	if c.onConnStop != nil {
-		log.Infof("BaiX CallOnConnStop....")
+		log.Infof("【BaiX】 CallOnConnStop....")
 		c.onConnStop(c)
 	}
 }
 
+// 正常读取到对端数据，更新心跳检测Active状态
 func (c *Connection) updateActivity() {
 	c.lastActivityTime = time.Now()
 }
 
 func (c *Connection) startReader() {
-	log.Infof("[Reader Goroutine is running]")
+	log.Infof("【BaiX】Reader Goroutine is running")
 	defer func() {
-		log.Infof("%s [conn Reader exit!]", c.RemoteAddr().String())
+		log.Infof("【BaiX】%s [conn Reader exit!]", c.RemoteAddr().String())
 		c.Stop()
 	}()
 
 	for {
 		select {
 		case <-c.ctx.Done():
+			log.Errorf("【BaiX】 close reader")
 			return
 		default:
 			buffer := make([]byte, conf.GlobalConfig.IOReadBuffSize)
@@ -172,10 +182,10 @@ func (c *Connection) startReader() {
 			// 从conn的IO中读取数据到内存缓冲buffer中
 			n, err := c.conn.Read(buffer)
 			if err != nil {
-				log.Errorf("read msg head [read datalen=%d], error = %s", n, err)
+				log.Errorf("【BaiX】read msg head [read data len=%d], error = %v", n, err)
 				return
 			}
-			log.Debugf("read buffer %s \n", hex.EncodeToString(buffer[0:n]))
+			log.Debugf("【BaiX】read buffer %s ", hex.EncodeToString(buffer[0:n]))
 
 			// 正常读取到对端数据，更新心跳检测Active状态
 			if n > 0 && c.hc != nil {
@@ -237,8 +247,8 @@ func (c *Connection) startWriter() {
 }
 
 func (c *Connection) finalizer() {
-	// Call the callback function registered by the user when closing the connection if it exists
-	// (如果用户注册了该链接的	关闭回调业务，那么在此刻应该显示调用)
+	log.Infof("【BaiX】[Stop] BaiX Connection is finalizer starting")
+	// 如果用户注册了该链接的	关闭回调业务，那么在此刻应该显示调用
 	c.callOnConnStop()
 
 	c.msgLock.Lock()
@@ -269,24 +279,22 @@ func (c *Connection) finalizer() {
 
 	c.isClosed = true
 
-	log.Infof("Conn Stop()...ConnID = %d", c.connID)
+	log.Infof("【BaiX】Conn Stop()...ConnID = %d", c.connID)
 }
 
 func (c *Connection) Start() {
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 
-	// Execute the hook method for processing business logic when creating a connection
-	// (按照用户传递进来的创建连接时需要处理的业务，执行钩子方法)
+	// 按照用户传递进来的创建连接时需要处理的业务，执行钩子方法
 	c.callOnConnStart()
 
-	// Start heart beating detection
+	// 开始心跳检测
 	if c.hc != nil {
 		c.hc.Start()
 		c.updateActivity()
 	}
 
-	// Start the Goroutine for reading data from the client
-	// (开启用户从客户端读取数据流程的Goroutine)
+	// 开启用户从客户端读取数据流程的Goroutine
 	routine.Go(c.ctx, func(ctx context.Context) error {
 		c.startReader()
 		return nil
@@ -347,13 +355,13 @@ func (c *Connection) Send(data []byte) error {
 	c.msgLock.RLock()
 	defer c.msgLock.RUnlock()
 	if c.isClosed == true {
-		log.Errorf("err is %v", berr.ErrConnectionClose)
+		log.Errorf("【BaiX】err is %v", berr.ErrConnectionClose)
 		return berr.ErrConnectionClose
 	}
 
 	_, err := c.conn.Write(data)
 	if err != nil {
-		log.Errorf("SendMsg err data = %+v, err = %+v", data, err)
+		log.Errorf("【BaiX】SendMsg err data = %+v, err = %+v", data, err)
 		return err
 	}
 
@@ -370,13 +378,13 @@ func (c *Connection) SendMsg(msgID uint32, data []byte) error {
 	// Pack data and send it
 	msg, err := c.packet.Pack(pack.NewMsgPackage(msgID, data))
 	if err != nil {
-		log.Errorf("Pack error msg ID = %d", msgID)
+		log.Errorf("【BaiX】Pack error msg ID = %d", msgID)
 		return berr.ErrPackFail
 	}
 
 	_, err = c.conn.Write(msg)
 	if err != nil {
-		log.Errorf("SendMsg err msg ID = %d, data = %+v, err = %+v", msgID, string(msg), err)
+		log.Errorf("【BaiX】SendMsg err msg ID = %d, data = %+v, err = %+v", msgID, string(msg), err)
 		return err
 	}
 	return nil
@@ -450,9 +458,7 @@ func (c *Connection) IsAlive() bool {
 	if c.isClosed {
 		return false
 	}
-	// Check the last activity time of the connection. If it's beyond the heartbeat interval,
-	// then the connection is considered dead.
-	// (检查连接最后一次活动时间，如果超过心跳间隔，则认为连接已经死亡)
+	// 检查连接最后一次活动时间，如果超过心跳间隔，则认为连接已经死亡
 	return time.Now().Sub(c.lastActivityTime) < conf.GlobalConfig.HeartbeatMaxDuration()
 }
 
