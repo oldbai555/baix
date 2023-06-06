@@ -81,11 +81,13 @@ func newServerWithConfig(config *conf.Config, ipVersion string) iface.IServer {
 
 func NewServer() iface.IServer {
 	conf.GlobalConfig.Show()
+	conf.GlobalConfig.Mode = conf.ServerModeTcp
 	return newServerWithConfig(conf.GlobalConfig, conf.ServerModeTcp)
 }
 
 func NewWsServer() iface.IServer {
 	conf.GlobalConfig.Show()
+	conf.GlobalConfig.Mode = conf.ServerModeWebsocket
 	return newServerWithConfig(conf.GlobalConfig, conf.ServerModeWebsocket)
 }
 
