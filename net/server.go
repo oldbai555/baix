@@ -59,26 +59,21 @@ type Server struct {
 
 func newServerWithConfig(config *conf.Config, ipVersion string) iface.IServer {
 	s := &Server{
-		Name:        config.Name,
-		IPVersion:   ipVersion,
-		IP:          config.Host,
-		Port:        config.TCPPort,
-		WsPort:      config.WsPort,
-		msgHandler:  nil,
-		ConnMgr:     nil,
-		onConnStart: nil,
-		onConnStop:  nil,
-		packet:      pack.Factory().NewPack(iface.BaiXDataPack),
-		exitChan:    nil,
-		decoder:     decoder.NewTLVDecoder(),
-		hc:          nil,
+		Name:       config.Name,
+		IPVersion:  ipVersion,
+		IP:         config.Host,
+		Port:       config.TCPPort,
+		WsPort:     config.WsPort,
+		msgHandler: newMsgHandle(),
+		ConnMgr:    newConnManager(),
+		packet:     pack.Factory().NewPack(iface.BaiXDataPack),
+		decoder:    decoder.NewTLVDecoder(),
 		upgrader: &websocket.Upgrader{
 			ReadBufferSize: int(config.IOReadBuffSize),
 			CheckOrigin: func(r *http.Request) bool {
 				return true
 			},
 		},
-		websocketAuth: nil,
 	}
 
 	return s
@@ -90,20 +85,18 @@ func NewServer() iface.IServer {
 }
 
 func (s *Server) Start() {
-	log.Infof("[START] Server name: %s,listener at IP: %s, Port %d is starting", s.Name, s.IP, s.Port)
+	log.Infof("【BaiX】[START] Server name: %s,listener at IP: %s, Port %d is starting", s.Name, s.IP, s.Port)
 	s.exitChan = make(chan struct{})
 
-	// Add decoder to interceptors
-	// (将解码器添加到拦截器)
+	// 将解码器添加到拦截器
 	if s.decoder != nil {
 		s.msgHandler.AddInterceptor(s.decoder)
 	}
-	// Start worker pool mechanism
-	// (启动worker工作池机制)
+
+	// 启动worker工作池机制
 	s.msgHandler.StartWorkerPool()
 
-	// Start a goroutine to handle server listener business
-	// (开启一个go去做服务端Listener业务)
+	// 开启一个 go 去做服务端 Listener 业务
 	switch conf.GlobalConfig.Mode {
 	case conf.ServerModeTcp:
 		routine.Go(context.TODO(), func(ctx context.Context) error {
@@ -130,7 +123,7 @@ func (s *Server) ListenTcpConn() error {
 	// 1. Get a TCP address
 	addr, err := net.ResolveTCPAddr(s.IPVersion, fmt.Sprintf("%s:%d", s.IP, s.Port))
 	if err != nil {
-		log.Errorf("[START] resolve tcp addr err: %v", err)
+		log.Errorf("【BaiX】[START] resolve tcp addr err: %v", err)
 		return err
 	}
 
@@ -169,7 +162,7 @@ func (s *Server) ListenTcpConn() error {
 			// 3.1 Set the maximum connection control for the server. If it exceeds the maximum connection, wait.
 			// (设置服务器最大连接控制,如果超过最大连接，则等待)
 			if s.ConnMgr.Len() >= conf.GlobalConfig.MaxConn {
-				log.Errorf("Exceeded the maxConnNum:%d, Wait:%d", conf.GlobalConfig.MaxConn, AcceptDelay.duration)
+				log.Errorf("【BaiX】Exceeded the maxConnNum:%d, Wait:%d", conf.GlobalConfig.MaxConn, AcceptDelay.duration)
 				AcceptDelay.Delay()
 				continue
 			}
@@ -179,10 +172,10 @@ func (s *Server) ListenTcpConn() error {
 			conn, err := listener.Accept()
 			if err != nil {
 				if errors.Is(err, net.ErrClosed) {
-					log.Errorf("Listener closed")
+					log.Errorf("【BaiX】Listener closed")
 					return err
 				}
-				log.Errorf("Accept err: %v", err)
+				log.Errorf("【BaiX】Accept err: %v", err)
 				AcceptDelay.Delay()
 				continue
 			}
@@ -217,31 +210,28 @@ func (s *Server) ListenWebsocketConn() error {
 		// 1. Check if the server has reached the maximum allowed number of connections
 		// (设置服务器最大连接控制,如果超过最大连接，则等待)
 		if s.ConnMgr.Len() >= conf.GlobalConfig.MaxConn {
-			log.Errorf("Exceeded the maxConnNum:%d, Wait:%d", conf.GlobalConfig.MaxConn, AcceptDelay.duration)
+			log.Errorf("【BaiX】Exceeded the maxConnNum:%d, Wait:%d", conf.GlobalConfig.MaxConn, AcceptDelay.duration)
 			AcceptDelay.Delay()
 			return
 		}
 
-		// 2. If websocket authentication is required, set the authentication information
-		// (如果需要 websocket 认证请设置认证信息)
+		// 2. 如果需要 websocket 认证请设置认证信息
 		if s.websocketAuth != nil {
 			err := s.websocketAuth(r)
 			if err != nil {
-				log.Errorf(" websocket auth err:%v", err)
+				log.Errorf("【BaiX】websocket auth err:%v", err)
 				w.WriteHeader(401)
 				AcceptDelay.Delay()
 				return
 			}
 		}
 
-		// 3. Check if there is a subprotocol specified in the header
-		// (判断 header 里面是有子协议)
+		// 3. 判断 header 里面是有子协议
 		if len(r.Header.Get("Sec-Websocket-Protocol")) > 0 {
 			s.upgrader.Subprotocols = websocket.Subprotocols(r)
 		}
 
-		// 4. Upgrade the connection to a websocket connection
-		// (升级成 websocket 连接)
+		// 4. 升级成 websocket 连接
 		conn, err := s.upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.Errorf("new websocket err:%v", err)
@@ -251,7 +241,6 @@ func (s *Server) ListenWebsocketConn() error {
 		}
 		AcceptDelay.Reset()
 
-		// 5. Handle the business logic of the new connection, which should already be bound to a handler and conn
 		// 5. 处理该新连接请求的 业务 方法， 此时应该有 handler 和 conn是绑定的
 		newCid := atomic.AddUint64(&s.cID, 1)
 		wsConn := newWebsocketConn(s, conn, newCid)
@@ -264,6 +253,7 @@ func (s *Server) ListenWebsocketConn() error {
 
 	err := http.ListenAndServe(fmt.Sprintf("%s:%d", s.IP, s.WsPort), nil)
 	if err != nil {
+		log.Errorf("【BaiX】err is %v", err)
 		panic(err)
 	}
 	return nil
@@ -299,7 +289,7 @@ func (s *Server) Serve() {
 	// 监听指定信号 ctrl+c kill信号
 	signal.Notify(c, os.Interrupt, os.Kill)
 	sig := <-c
-	log.Infof("[SERVE] BaiX server , name %s, Serve Interrupt, signal = %v", s.Name, sig)
+	log.Infof("【BaiX】[SERVE] BaiX server , name %s, Serve Interrupt, signal = %v", s.Name, sig)
 }
 
 func (s *Server) AddRouter(msgID uint32, router iface.IRouter) {

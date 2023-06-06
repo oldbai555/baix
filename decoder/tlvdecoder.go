@@ -1,29 +1,3 @@
-// TLV, which stands for Tag(Type)-Length-Value, is a simple and practical data transmission scheme.
-// In the definition of TLV, it can be seen that it consists of three fields: the tag field (Tag), the length
-// field (Length), and the value field (Value).
-// The value of the length field is actually the length of the content field.
-//
-// Before decoding (20 bytes) After decoding (20 bytes)
-// +------------+------------+-----------------+       +------------+------------+-----------------+
-// | Tag        | Length     | Value           |-----> | Tag        | Length     | Value           |
-// | 0x00000001 | 0x0000000C | "HELLO, WORLD"  |       | 0x00000001 | 0x0000000C | "HELLO, WORLD"  |
-// +------------+------------+-----------------+       +------------+------------+-----------------+
-// Tag: uint32 type, occupies 4 bytes, Tag is set as MsgId, temporarily set to 1
-// Length: uint32 type, occupies 4 bytes, Length marks the length of Value, which is 12(hex:0x0000000C)
-// Value: 12 characters in total, occupies 12 bytes
-//
-// Explanation:
-// lengthFieldOffset = 4 (The byte index of Length is 4) Length field offset
-// lengthFieldLength = 4 (Length is 4 bytes) Length field length in bytes
-// lengthAdjustment = 0 (Length only represents the length of Value. The program will read only Length bytes and end.
-// 	                     If there is a crc of 2 bytes after Value, then this is 2. If Length marks the total length of
-//	                     Tag+Length+Value, then this is -8)
-// initialBytesToStrip = 0 (This 0 means that the complete protocol content Tag+Length+Value is returned. If you only
-//                          want to return the Value content, remove the 4 bytes of Tag and 4 bytes of Length, and
-//                          this is 8) Number of bytes to strip from the decoded frame
-// maxFrameLength = 2^32 + 4 + 4 (Since Length is of uint type, 2^32 represents the maximum length of Value. In addition,
-//                                Tag and Length each occupy 4 bytes.)
-
 // [简体中文]
 // TLV，即Tag(Type)—Length—Value，是一种简单实用的数据传输方案。
 //在TLV的定义中，可以知道它包括三个域，分别为：标签域（Tag），长度域（Length），内容域（Value）。这里的长度域的值实际上就是内容域的长度。
@@ -123,8 +97,7 @@ func (tlv *TLVDecoder) Intercept(chain iface.IChain) iface.IcResp {
 	//2. Get Data
 	data := iMessage.GetData()
 
-	//3. If the amount of data read is less than the length of the header, proceed to the next layer directly.
-	// (读取的数据不超过包头，直接进入下一层)
+	//3. 读取的数据不超过包头，直接进入下一层
 	if len(data) < TlvHeaderSize {
 		return chain.ProceedWithIMessage(iMessage, nil)
 	}
@@ -132,13 +105,11 @@ func (tlv *TLVDecoder) Intercept(chain iface.IChain) iface.IcResp {
 	//4. TLV Decode
 	tlvData := tlv.decode(data)
 
-	//5. Set the decoded data back to the IMessage, the BaiX Router needs MsgID for addressing
-	// (将解码后的数据重新设置到IMessage中, BaiX 的Router需要 MsgID 来寻址)
+	//5. 将解码后的数据重新设置到IMessage中, BaiX 的Router需要 MsgID 来寻址
 	iMessage.SetMsgID(tlvData.Tag)
 	iMessage.SetData(tlvData.Value)
 	iMessage.SetDataLen(tlvData.Length)
 
-	//6. Pass the decoded data to the next layer.
-	// (将解码后的数据进入下一层)
+	//6. 将解码后的数据进入下一层
 	return chain.ProceedWithIMessage(iMessage, *tlvData)
 }

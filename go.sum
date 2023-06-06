@@ -20,8 +20,12 @@ github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd h1:TRLaZ9cD/w
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
 github.com/modern-go/reflect2 v1.0.2 h1:xBagoLtFs94CBntxluKeaWgTMpvLxC4ur3nMaC9Gz0M=
 github.com/modern-go/reflect2 v1.0.2/go.mod h1:yWuevngMOJpCy52FWWMvUC8ws7m/LJsjYzDa0/r8luk=
+github.com/oldbai555/lbtool v0.0.0-20230524115325-5782e5ce1760 h1:nGkyu1cudSR+JiaYmPpd0xfNyg2UBjrsDMuQPTR7yJk=
+github.com/oldbai555/lbtool v0.0.0-20230524115325-5782e5ce1760/go.mod h1:hcc8NbjTZ4fdrEA+a7sFfxth2qgXF5SJVprdKuON/GI=
 github.com/oldbai555/lbtool v0.0.2-0.20230516102620-1dd6c818054d h1:BlzvhEO2pUeeGgN9oReSM0CHyhHMT9aZPCHaWjtFva8=
 github.com/oldbai555/lbtool v0.0.2-0.20230516102620-1dd6c818054d/go.mod h1:hcc8NbjTZ4fdrEA+a7sFfxth2qgXF5SJVprdKuON/GI=
+github.com/oldbai555/lbtool v0.0.4 h1:9iCQ6QtTGrhinJYFrFRmGfUiLoApHwbvkCUvBfLQg1Q=
+github.com/oldbai555/lbtool v0.0.4/go.mod h1:8Xk9NXCqnSUZzlwHfoUO4oi/NBbywPFDC+G1cFMofUA=
 github.com/petermattis/goid v0.0.0-20220824145935-af5520614cb6 h1:CoZdAHg4WQNvhnyqCxKEDlRRnsvEafj0RPTF9KBGi58=
 github.com/petermattis/goid v0.0.0-20220824145935-af5520614cb6/go.mod h1:pxMtw7cyUw6B2bRH0ZBANSPg+AoSud1I1iyJHI69jH4=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=

@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/gorilla/websocket v1.5.0
-	github.com/oldbai555/lbtool v0.0.2-0.20230516102620-1dd6c818054d
+	github.com/oldbai555/lbtool v0.0.0-20230524115325-5782e5ce1760
 	github.com/urfave/cli/v2 v2.3.0
 )
 
