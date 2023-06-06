@@ -11,11 +11,11 @@ type Inotify interface {
 
 	DelNotifyByID(id uint64) // 删除某个链接
 
-	NotifyToConnByID(id uint64, msgID uint32, data []byte) error // 通知某个id的方法
+	NotifyToConnByID(id uint64, msgId uint32, data []byte) error // 通知某个id的方法
 
-	NotifyAll(msgID uint32, data []byte) error // 通知所有人
+	NotifyAll(msgId uint32, data []byte) error // 通知所有人
 
-	NotifyBuffToConnByID(id uint64, msgID uint32, data []byte) error // 通过缓冲队列通知某个id的方法
+	NotifyBuffToConnByID(id uint64, msgId uint32, data []byte) error // 通过缓冲队列通知某个id的方法
 
-	NotifyBuffAll(msgID uint32, data []byte) error // 缓冲队列通知所有人
+	NotifyBuffAll(msgId uint32, data []byte) error // 缓冲队列通知所有人
 }
